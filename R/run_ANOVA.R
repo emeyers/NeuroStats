@@ -2,39 +2,57 @@
 
 library(dplyr)
 library(tidyr)
+library(ggplot2)
 library(NeuroDecodeR)
 
 
 
-binned_data_name <- "../debug_new_features/Zhang_Desimone_7object_data/data/binned/ZD_150bins_50sampled.Rda"
+# Add roxygen documentation, what is listed below could be an example
+
+binned_data_name <- "../inst/extdata/ZD_150bins_50sampled.Rda"
 
 labels <- "stimulus_ID"
 
 anova_results <- run_ANOVA(binned_data_name, labels)
 
 
+# Add this as a generic plot function...
 
-# test that my anova gives identical results to R's anova function
+significance_level <- .0001
 
-iSite = 2
-time_period_to_test <- "time.-100_49"
-
-load(binned_data_name)
-one_site_data <- binned_data |>
-  filter(siteID == iSite) |>
-  rename(labels = all_of(paste0("labels.", labels))) |>
-  rename(activity = time_period_to_test) 
-
-r_anova <- anova(lm(activity ~ labels, data = one_site_data))
-
-my_anova <- filter(anova_results, siteID == iSite,  time_period == time_period_to_test)
-
-
-# check if R's anova is giving the same results as my anova 
-# (to within very small rounding error)
-(r_anova$`Pr(>F)`[1] - my_anova$p_val) < 10^-10
+anova_results |> 
+  mutate(stat_sig = p_val < significance_level) |> 
+  group_by(time_period) |>
+  summarize(percent_selective = 100 * mean(stat_sig)) |>
+  mutate(Time  = NeuroDecodeR:::get_center_bin_time(time_period)) |>
+  ggplot(aes(Time, percent_selective)) +
+  geom_point() + 
+  geom_line() + 
+  ylab(paste("Percent of sites selective   (p < ", significance_level, ")")) +
+  geom_hline(yintercept = 100 * significance_level, col = "red") +
+  theme_bw()
 
 
+# 
+# # test that my anova gives identical results to R's anova function
+# 
+# iSite = 2
+# time_period_to_test <- "time.-100_49"
+# 
+# load(binned_data_name)
+# one_site_data <- binned_data |>
+#   filter(siteID == iSite) |>
+#   rename(labels = all_of(paste0("labels.", labels))) |>
+#   rename(activity = time_period_to_test) 
+# 
+# r_anova <- anova(lm(activity ~ labels, data = one_site_data))
+# 
+# my_anova <- filter(anova_results, siteID == iSite,  time_period == time_period_to_test)
+# 
+# 
+# # check if R's anova is giving the same results as my anova 
+# # (to within very small rounding error)
+# (r_anova$`Pr(>F)`[1] - my_anova$p_val) < 10^-10
 
 
 
@@ -71,7 +89,6 @@ run_ANOVA <- function(binned_data, labels, include_site_info = TRUE) {
               p_val = pf(F_stat, df1, df2, lower.tail = FALSE), .groups = "drop")
   
   
-
   if (include_site_info) {
     
     site_info <- select(binned_data, "siteID", starts_with("site_info")) |>
@@ -79,8 +96,8 @@ run_ANOVA <- function(binned_data, labels, include_site_info = TRUE) {
     
     # For each site, there should only be one unique value for rows for the
     # site_info columns. (i.e., each row of site_info contains redundant
-    # information). If this is not the case, send a warning and only use the first
-    # entry...
+    # information). If this is not the case, send a warning and only use the first 
+    # entry for each site. 
     if (max(table(site_info$siteID)) > 1) {
       
       warning(paste("A least one of binned data's site_info columns contains different values",
@@ -106,47 +123,4 @@ run_ANOVA <- function(binned_data, labels, include_site_info = TRUE) {
   
   
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 
-# anova_results5 <- long_data |>
-#   group_by(siteID) |>
-#   mutate(df1 = length(unique(labels)) - 1) |>
-#   group_by(siteID, time_period) |>
-#   mutate(df2 = n() - df1 - 1) |>
-#   #ungroup() |>
-#   group_by(siteID, labels, time_period) |>
-#   mutate(group_mean = mean(activity)) |>
-#   #ungroup() |>
-#   group_by(siteID, time_period) |>
-#   mutate(overall_mean = mean(activity)) |>
-#   #ungroup() |>
-#   mutate(group_deviation_squared = (group_mean - overall_mean)^2) |>
-#   #ungroup() |>
-#   group_by(siteID, time_period) |>
-#   mutate(residual_squared = (group_mean - activity)^2) |>
-#   group_by(siteID, time_period) |>
-#   summarize(df1 = mean(df1),
-#             df2 = mean(df2),
-#             SS_group = sum(group_deviation_squared),
-#             SS_residual = sum(residual_squared),
-#             F_stat = (1/df1 * SS_group)/(1/df2 * SS_residual),
-#             p_val = pf(F_stat, df1, df2, lower.tail = FALSE), .groups = "drop")
-# 
-# 
 
